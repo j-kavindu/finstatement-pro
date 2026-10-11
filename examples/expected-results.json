@@ -1,0 +1,234 @@
+{
+  "pnl": {
+    "revenueRows": [
+      {
+        "label": "Sales Revenue",
+        "accountCode": "4010",
+        "amount": 200000
+      }
+    ],
+    "otherIncomeRows": [],
+    "totalOtherIncome": 0,
+    "totalRevenue": 200000,
+    "cogsRows": [
+      {
+        "label": "Cost of Sales",
+        "accountCode": "5010",
+        "amount": 80000
+      }
+    ],
+    "totalCogs": 80000,
+    "grossProfit": 120000,
+    "operatingExpenseRows": [
+      {
+        "label": "Salaries Expense",
+        "accountCode": "6010",
+        "amount": 50000
+      },
+      {
+        "label": "Insurance Expense",
+        "accountCode": "6040",
+        "amount": 4500
+      },
+      {
+        "label": "Depreciation Expense",
+        "accountCode": "6050",
+        "amount": 18500
+      },
+      {
+        "label": "Interest Expense",
+        "accountCode": "7010",
+        "amount": 4000
+      },
+      {
+        "label": "Income Tax Expense",
+        "accountCode": "8010",
+        "amount": 8000
+      }
+    ],
+    "totalOperatingExpenses": 85000,
+    "operatingProfit": 47000,
+    "depreciationExpenses": 18500,
+    "interestExpense": 4000,
+    "taxExpense": 8000,
+    "netProfit": 35000
+  },
+  "bs": {
+    "currentAssets": [
+      {
+        "label": "Cash and Cash Equivalents",
+        "accountCode": "1010",
+        "amount": 100000
+      },
+      {
+        "label": "Accounts Receivable (Trade)",
+        "accountCode": "1020",
+        "amount": 40000
+      },
+      {
+        "label": "Inventory",
+        "accountCode": "1030",
+        "amount": 40000
+      },
+      {
+        "label": "Prepaid Insurance",
+        "accountCode": "1040",
+        "amount": 7500
+      }
+    ],
+    "totalCurrentAssets": 187500,
+    "nonCurrentAssets": [
+      {
+        "label": "Property, Plant & Equipment",
+        "accountCode": "1510",
+        "amount": 120000
+      },
+      {
+        "label": "Accumulated Depreciation - Equipment",
+        "accountCode": "1520",
+        "amount": -38500,
+        "notes": "Contra-Asset (Accumulated Depreciation)"
+      }
+    ],
+    "totalNonCurrentAssets": 81500,
+    "totalAssets": 269000,
+    "currentLiabilities": [
+      {
+        "label": "Trade Accounts Payable",
+        "accountCode": "2010",
+        "amount": 20000
+      },
+      {
+        "label": "Accrued Payroll",
+        "accountCode": "2020",
+        "amount": 7000
+      },
+      {
+        "label": "Income Taxes Payable",
+        "accountCode": "2030",
+        "amount": 0
+      }
+    ],
+    "totalCurrentLiabilities": 27000,
+    "nonCurrentLiabilities": [
+      {
+        "label": "Long-Term Bank Loan",
+        "accountCode": "2510",
+        "amount": 30000
+      }
+    ],
+    "totalNonCurrentLiabilities": 30000,
+    "totalLiabilities": 57000,
+    "equityItems": [
+      {
+        "label": "Share Capital",
+        "accountCode": "3010",
+        "amount": 100000
+      },
+      {
+        "label": "Retained Earnings (Opening Balance)",
+        "accountCode": "3020",
+        "amount": 82000
+      },
+      {
+        "label": "Dividends Declared",
+        "accountCode": "3030",
+        "amount": -5000,
+        "notes": "Contra-Equity"
+      }
+    ],
+    "openingRetainedEarnings": 82000,
+    "currentYearProfit": 35000,
+    "totalEquity": 212000,
+    "totalLiabilitiesAndEquity": 269000,
+    "reconciliationDifference": 0,
+    "isReconciled": true
+  },
+  "eq": {
+    "openingOtherReserves": 0,
+    "otherComprehensiveIncome": 0,
+    "openingShareCapital": 100000,
+    "openingRetainedEarnings": 82000,
+    "openingTotal": 182000,
+    "netProfitForPeriod": 35000,
+    "shareCapitalMovements": 0,
+    "dividendsPaid": 5000,
+    "closingShareCapital": 100000,
+    "closingRetainedEarnings": 112000,
+    "closingTotalEquity": 212000
+  },
+  "cf": {
+    "isAvailable": true,
+    "operatingActivities": [
+      {
+        "label": "Profit for the period (Net Income)",
+        "amount": 35000
+      },
+      {
+        "label": "Adjustments for: Depreciation & Amortization",
+        "amount": 18500
+      },
+      {
+        "label": "Tax expense added back",
+        "amount": 8000
+      },
+      {
+        "label": "Income tax paid",
+        "amount": -8000
+      },
+      {
+        "label": "Interest expense added back",
+        "amount": 4000
+      },
+      {
+        "label": "Interest paid (operating policy)",
+        "amount": -4000
+      },
+      {
+        "label": "(Increase) / decrease in Accounts Receivable",
+        "amount": -20000
+      },
+      {
+        "label": "(Increase) / decrease in Inventories",
+        "amount": -10000
+      },
+      {
+        "label": "(Increase) / decrease in Prepayments and other assets",
+        "amount": 4500
+      },
+      {
+        "label": "Increase / (decrease) in Accounts Payable & Trade Payables",
+        "amount": 5000
+      },
+      {
+        "label": "Increase / (decrease) in Accrued expenses",
+        "amount": 2000
+      }
+    ],
+    "netCashFromOperating": 35000,
+    "investingActivities": [
+      {
+        "label": "Purchase of Property, Plant & Equipment (CapEx)",
+        "amount": -20000
+      }
+    ],
+    "netCashFromInvesting": -20000,
+    "financingActivities": [
+      {
+        "label": "Repayment of long-term borrowings & debt",
+        "amount": -10000
+      },
+      {
+        "label": "Dividends paid to shareholders",
+        "amount": -5000
+      }
+    ],
+    "netCashFromFinancing": -15000,
+    "netChangeInCash": 0,
+    "openingCash": 100000,
+    "closingCashCalculated": 100000,
+    "closingCashBalanceSheet": 100000,
+    "cashReconciliationDifference": 0,
+    "isCashReconciled": true
+  }
+}

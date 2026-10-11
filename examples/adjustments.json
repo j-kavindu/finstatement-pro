@@ -1,0 +1,92 @@
+[
+  {
+    "id": "AJE-001",
+    "periodId": "period-fy2025",
+    "entryNumber": "AJE-001",
+    "date": "2025-12-31",
+    "description": "Annual depreciation per approved asset schedule",
+    "totalDebit": 18500,
+    "totalCredit": 18500,
+    "isBalanced": true,
+    "status": "posted",
+    "createdAt": "2025-12-31T18:00:00Z",
+    "lines": [
+      {
+        "id": "AJE-001-0",
+        "accountId": "acc-6050",
+        "accountCode": "6050",
+        "accountName": "Depreciation Expense",
+        "debit": 18500,
+        "credit": 0
+      },
+      {
+        "id": "AJE-001-1",
+        "accountId": "acc-1520",
+        "accountCode": "1520",
+        "accountName": "Accumulated Depreciation - Equipment",
+        "debit": 0,
+        "credit": 18500
+      }
+    ]
+  },
+  {
+    "id": "AJE-002",
+    "periodId": "period-fy2025",
+    "entryNumber": "AJE-002",
+    "date": "2025-12-31",
+    "description": "Unpaid December payroll accrual",
+    "totalDebit": 2000,
+    "totalCredit": 2000,
+    "isBalanced": true,
+    "status": "posted",
+    "createdAt": "2025-12-31T18:00:00Z",
+    "lines": [
+      {
+        "id": "AJE-002-0",
+        "accountId": "acc-6010",
+        "accountCode": "6010",
+        "accountName": "Salaries Expense",
+        "debit": 2000,
+        "credit": 0
+      },
+      {
+        "id": "AJE-002-1",
+        "accountId": "acc-2020",
+        "accountCode": "2020",
+        "accountName": "Accrued Payroll",
+        "debit": 0,
+        "credit": 2000
+      }
+    ]
+  },
+  {
+    "id": "AJE-003",
+    "periodId": "period-fy2025",
+    "entryNumber": "AJE-003",
+    "date": "2025-12-31",
+    "description": "Insurance consumed during the year",
+    "totalDebit": 4500,
+    "totalCredit": 4500,
+    "isBalanced": true,
+    "status": "posted",
+    "createdAt": "2025-12-31T18:00:00Z",
+    "lines": [
+      {
+        "id": "AJE-003-0",
+        "accountId": "acc-6040",
+        "accountCode": "6040",
+        "accountName": "Insurance Expense",
+        "debit": 4500,
+        "credit": 0
+      },
+      {
+        "id": "AJE-003-1",
+        "accountId": "acc-1040",
+        "accountCode": "1040",
+        "accountName": "Prepaid Insurance",
+        "debit": 0,
+        "credit": 4500
+      }
+    ]
+  }
+]
