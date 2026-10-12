@@ -19,7 +19,7 @@ for (const label of ['Trial Balance','Adjustments','Statements','Ratios','Audit 
  await button.click(); await page.waitForTimeout(100);
 }
 await page.setViewportSize({width:390,height:844});
-await page.getByRole('button',{name:'Workspace Menu'}).click();
+await page.getByRole('button',{name:'Workspace Menu',exact:true}).click();
 await page.screenshot({path:'docs/mobile.png',fullPage:true});
 if(errors.length) throw new Error(errors.join('\n'));
 console.log('PASS: desktop render, tab navigation, mobile menu; zero uncaught browser errors');

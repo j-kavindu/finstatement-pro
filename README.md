@@ -1,8 +1,8 @@
 # FinStatement Pro
 
-[Source repository](https://github.com/j-kavindu/finstatement-pro) · [GitHub Actions](https://github.com/j-kavindu/finstatement-pro/actions)
+[Live synthetic demo](https://j-kavindu.github.io/finstatement-pro/) · [Source repository](https://github.com/j-kavindu/finstatement-pro) · [CI and deployment](https://github.com/j-kavindu/finstatement-pro/actions)
 
-GitHub Pages deployment is configured in `.github/workflows/pages.yml`. Enable GitHub Actions under Settings → Pages before the first deployment.
+GitHub Pages deploys the public, in-memory synthetic demo from `.github/workflows/pages.yml`. Firebase configuration is not included; online persistence requires a separately configured Firebase project.
 
 An **Accounting and Financial Reporting portfolio project** by Kavindu Heshan Jayawardhana — Accounting Undergraduate, University of Sri Jayewardenepura, and CA Sri Lanka student.
 

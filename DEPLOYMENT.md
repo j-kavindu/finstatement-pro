@@ -1,6 +1,6 @@
 # Firebase Hosting and public-demo deployment
 
-Status: build prepared; no cloud account changes or public deployment performed.
+Status: the GitHub Pages **synthetic demo** was deployed by GitHub Actions on 11 October 2026. Firebase Authentication/Firestore are not configured here, and no Firebase production deployment or live authentication verification is claimed.
 
 ## Local verification
 

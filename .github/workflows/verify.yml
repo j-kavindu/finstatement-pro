@@ -21,3 +21,12 @@ jobs:
       - run: npm run test:rules
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
+      - name: Upload verified desktop and mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finstatement-pro-ui-screenshots
+          path: |
+            docs/dashboard.png
+            docs/mobile.png
+          if-no-files-found: ignore
