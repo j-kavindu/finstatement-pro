@@ -12,7 +12,8 @@ Release 0.2.0. All test data is synthetic. This report replaces the previous bas
 | Sample XLSX/PDF generation | Passed; generated workbook reopened with all seven worksheets |
 | Downloaded XLSX content | Passed; equity numeric components sum to 212,000 |
 | Downloaded PDF content | Passed; four pages, draft controls and expected 35,000 profit / 269,000 assets present |
-| Firestore emulator in local environment | Not executed: installed Java 17 is below CLI's Java 21 requirement |
+| Firestore emulator | Passed in GitHub CI with Java 21; local Java 17 could not start it |
+| GitHub Pages deployment | Succeeded for implementation commit `9af66a4` |
 | Production Firebase authentication and Firestore | Not configured or tested; user-owned project acceptance required |
 
 ## Unit/regression coverage
@@ -29,6 +30,6 @@ Actual captures: `docs/dashboard.png`, `docs/mobile.png`, `docs/import-mapping.p
 
 ## Rules and production limits
 
-The rules suite covers workspace ownership, anonymous/cross-user denial, revisions, append-only audit events, forged actors and unsupported workspace IDs. Local startup was blocked by Java 17, so no local emulator pass is claimed. The repository verification workflow provisions Java 21 and runs the emulator/browser suites. Check the workflow's actual result for the deployed commit.
+The rules suite covers workspace ownership, anonymous/cross-user denial, revisions, append-only audit events, forged actors and unsupported workspace IDs. Local startup was blocked by Java 17, so no local emulator pass is claimed. The [GitHub verification run](https://github.com/j-kavindu/finstatement-pro/actions/runs/38319248123) provisioned Java 21 and passed both the emulator and Chromium browser suites for implementation commit `9af66a485f7cfcfb1226b13ab0f7c4a7ef48745c`. The [Pages deployment run](https://github.com/j-kavindu/finstatement-pro/actions/runs/38319248089) also completed successfully. A separate direct live-browser probe from this local environment was blocked by its network connection; no live-browser acceptance is claimed.
 
 This release does not verify production Firebase OAuth, email sign-in, deployed rule behavior or real confidential financial datasets. Follow DEPLOYMENT.md for those acceptance checks.
