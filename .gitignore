@@ -11,3 +11,7 @@ coverage/
 *.zip
 firebase-debug.log
 firestore-debug.log
+
+# Generated acceptance-test downloads
+docs/ui-export.*
+.firebaserc

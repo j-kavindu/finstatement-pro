@@ -1,21 +1,21 @@
 account_code,account_name,classification,is_contra,debit,credit
-1010,Cash and Cash Equivalents,current_asset,false,100000,0
-1020,Accounts Receivable (Trade),current_asset,false,40000,0
-1030,Inventory,current_asset,false,40000,0
-1040,Prepaid Insurance,current_asset,false,12000,0
-1510,Property, Plant & Equipment,non_current_asset,false,120000,0
-1520,Accumulated Depreciation - Equipment,non_current_asset,true,0,20000
-2010,Trade Accounts Payable,current_liability,false,0,20000
-2020,Accrued Payroll,current_liability,false,0,5000
-2030,Income Taxes Payable,current_liability,false,0,0
-2510,Long-Term Bank Loan,non_current_liability,false,0,30000
-3010,Share Capital,equity,false,0,100000
-3020,Retained Earnings (Opening Balance),equity,false,0,82000
-3030,Dividends Declared,equity,true,5000,0
-4010,Sales Revenue,revenue,false,0,200000
-5010,Cost of Sales,cogs,false,80000,0
-6010,Salaries Expense,operating_expense,false,48000,0
-6040,Insurance Expense,operating_expense,false,0,0
-6050,Depreciation Expense,depreciation_expense,false,0,0
-7010,Interest Expense,interest_expense,false,4000,0
-8010,Income Tax Expense,tax_expense,false,8000,0
+"1010","Cash and Cash Equivalents","current_asset","false","100000","0"
+"1020","Accounts Receivable (Trade)","current_asset","false","40000","0"
+"1030","Inventory","current_asset","false","40000","0"
+"1040","Prepaid Insurance","current_asset","false","12000","0"
+"1510","Property, Plant & Equipment","non_current_asset","false","120000","0"
+"1520","Accumulated Depreciation - Equipment","non_current_asset","true","0","20000"
+"2010","Trade Accounts Payable","current_liability","false","0","20000"
+"2020","Accrued Payroll","current_liability","false","0","5000"
+"2030","Income Taxes Payable","current_liability","false","0","0"
+"2510","Long-Term Bank Loan","non_current_liability","false","0","30000"
+"3010","Share Capital","equity","false","0","100000"
+"3020","Retained Earnings (Opening Balance)","equity","false","0","82000"
+"3030","Dividends Declared","equity","true","5000","0"
+"4010","Sales Revenue","revenue","false","0","200000"
+"5010","Cost of Sales","cogs","false","80000","0"
+"6010","Salaries Expense","operating_expense","false","48000","0"
+"6040","Insurance Expense","operating_expense","false","0","0"
+"6050","Depreciation Expense","depreciation_expense","false","0","0"
+"7010","Interest Expense","interest_expense","false","4000","0"
+"8010","Income Tax Expense","tax_expense","false","8000","0"

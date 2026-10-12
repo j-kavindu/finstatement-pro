@@ -74,7 +74,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <span aria-hidden="true">·</span>
             <span>Currency: {curr}</span>
             <span aria-hidden="true">·</span>
-            <span>{company.reportingFramework}</span>
+            <span>Presentation preference: {company.reportingFramework}</span>
           </div>
         </div>
 

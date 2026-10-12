@@ -19,7 +19,7 @@ export const SAMPLE_COMPANY: Company = {
   name: 'Apex Horizon Technologies Inc.',
   industry: 'Enterprise Software & Cloud Systems',
   currency: 'USD',
-  reportingFramework: 'IFRS-aligned',
+  reportingFramework: 'General-purpose draft',
   createdAt: '2025-01-01T08:00:00Z',
   updatedAt: '2025-12-31T20:00:00Z',
 };

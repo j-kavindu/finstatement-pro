@@ -74,7 +74,7 @@ export interface Company {
   name: string;
   industry: string;
   currency: string;
-  reportingFramework: 'IFRS-aligned' | 'US-GAAP-aligned' | 'SME-Standard';
+  reportingFramework: 'General-purpose draft' | 'IFRS-aligned' | 'US-GAAP-aligned' | 'SME-Standard';
   createdAt: string;
   updatedAt: string;
 }
@@ -235,4 +235,24 @@ export interface RatioItem {
   status: 'good' | 'warning' | 'critical' | 'unavailable';
   explanation: string;
   missingDataWarning?: string;
+}
+
+/** Versioned private aggregate. Monetary JSON fields are validated two-decimal
+ * numbers; decimal.js performs all accounting addition before number output. */
+export interface LedgerWorkspace {
+  tbRows: TrialBalanceRow[];
+  adjustments: AdjustingJournalEntry[];
+  supplementary?: SupplementaryCashFlowData;
+  equityMovement?: EquityMovementData;
+  comparativeTbRows: TrialBalanceRow[];
+  auditLogs: AuditLogEntry[];
+  versionSnapshots: ReportVersionSnapshot[];
+}
+export interface WorkspacePayload extends LedgerWorkspace {
+  schemaVersion?: 1; // absent means legacy v1; retained for existing users
+  companies: Company[];
+  selectedCompany: Company;
+  periods: ReportingPeriod[];
+  selectedPeriod: ReportingPeriod;
+  ledgers: Record<string, LedgerWorkspace>;
 }

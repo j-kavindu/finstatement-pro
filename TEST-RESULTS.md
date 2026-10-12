@@ -1,28 +1,34 @@
-# Executed checks — 12 October 2026
+# P01 verification results
 
-| Check | Status | Evidence / exact limit |
-|---|---|---|
-| Dependency installation | PASS after correction | Initial ERESOLVE repaired; npm install completed; package-lock included |
-| Strict TypeScript | PASS | TEST-TYPECHECK.txt, no diagnostics |
-| Production build | PASS with large-bundle warning | TEST-BUILD.txt |
-| Node accounting/import/export tests | PASS 12/12 | TEST-UNIT.txt |
-| In-app suite executed under Node | PASS 12/12 | TEST-LEGACY.txt; command name test:browser-suite does not imply browser execution |
-| Actual XLSX/PDF generation | PASS | TEST-REPORTS.txt; Excel reopened with six worksheets |
-| PDF rendering/visual review | PASS | Three pages rendered with Poppler and inspected; all ratios and cash flow included |
-| React server-render smoke | PASS | TEST-RENDER.txt; not interactive/browser verification |
-| Playwright UI smoke | BLOCKED, not passed | Executable absent; Chromium downloads invalid/truncated ZIP. TEST-UI.txt, TEST-BROWSER-INSTALL.txt |
-| Firestore rules emulator | BLOCKED, not passed | Firebase CLI requires Java 21+, environment Java 17. TEST-RULES.txt |
-| Rules without emulator host | SKIPPED, not passed | TEST-RULES-SKIP.txt |
-| Production npm audit | PASS, zero known advisories | SECURITY-AUDIT-PRODUCTION.json |
-| Full development npm audit | OPEN, 11 advisories | 7 high, 4 moderate in CLI tooling; SECURITY-AUDIT.json |
-| Scoped credentials scan | PASS | No real private keys/service accounts/non-placeholder Firebase credentials found in source; env files ignored |
-| Live Google/email auth and restoration | NOT RUN | Firebase project/configuration not supplied |
-| GitHub/Firebase/Pages publication | NOT RUN | Prepared only; approval/account access needed |
+Release 0.2.0. All test data is synthetic. This report replaces the previous baseline's test-status summary; it does not claim financial compliance or live Firebase verification.
 
-## Independently specified sample expectations (synthetic USD)
+| Check | Result |
+|---|---|
+| TypeScript strict `npm run typecheck` | Passed |
+| Node unit/regression suite `npm test` | 36 passed, 0 failed, 0 skipped |
+| Existing engine scenario suite `npm run test:browser-suite` | 12 scenarios passed; executed under Node |
+| Vite production build | Passed; initial bundle-size warning remains |
+| Actual Chromium UI acceptance | Passed at 1440, 1280, 1024, 768 and 390px widths |
+| Sample XLSX/PDF generation | Passed; generated workbook reopened with all seven worksheets |
+| Downloaded XLSX content | Passed; equity numeric components sum to 212,000 |
+| Downloaded PDF content | Passed; four pages, draft controls and expected 35,000 profit / 269,000 assets present |
+| Firestore emulator in local environment | Not executed: installed Java 17 is below CLI's Java 21 requirement |
+| Production Firebase authentication and Firestore | Not configured or tested; user-owned project acceptance required |
 
-Revenue 200,000; COGS 80,000; gross profit 120,000; payroll after accrual 50,000; accrued payroll 7,000; insurance expense 4,500; prepaid insurance 7,500; depreciation 18,500; accumulated depreciation 38,500; net profit 35,000.
+## Unit/regression coverage
 
-Assets 269,000 = liabilities 57,000 + equity 212,000. Opening equity 182,000 + profit 35,000 - dividends 5,000 = closing equity 212,000. Operating cash 35,000; investing -20,000; financing -15,000. Opening cash 100,000 + zero cash change = closing cash 100,000.
+Decimal ties and cancellation; large bounded sums; invalid money; independent synthetic expected totals; opening equity mismatch even if final equity agrees; missing equity; rollforward mismatch; absent comparative/supplementary cash flow data; negative retained earnings and OCI; contra assets/revenue/liabilities/expenses; unusual signs; forged cached journal totals; duplicate journal IDs; invalid dates/periods; ignored drafts; invalid journal precision; stable account identity on re-import; explicit mapping and contra flags; missing/duplicate columns; invalid numeric grouping; orphan amount rows; rejected rows excluded from totals; leading zero codes; empty/oversized/unsupported files; duplicate headers; workspace validation; export reconciliation guards; shipped demo CSV round trip including comma-containing account names.
 
-Negative tests cover forged journal totals, missing accounts, malformed/negative/duplicate imports, missing cash-flow sources and invalid monetary values. Passing establishes tested behavior, not source-record accuracy or statutory compliance.
+## Browser acceptance
+
+The actual built app was exercised with Chromium 153. A normal Playwright browser download was unavailable in this environment; a temporary Chromium runtime supplied the executable via `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. It is not an application dependency. Test routing uses HTTPS, as required for browser `crypto.randomUUID` support.
+
+Verified navigation, five viewport widths without document overflow, mobile menu, valid CSV re-import, blocked invalid import, preserved posted journal links, reserve columns, opening equity mismatch/export rejection, correcting equity, actual XLSX/PDF downloads, period switching/restoration and a newly posted balanced payroll adjustment that changes profit to 34,900. Unbalanced posting is disabled. Zero uncaught browser errors in the final run.
+
+Actual captures: `docs/dashboard.png`, `docs/mobile.png`, `docs/import-mapping.png`, `docs/journals.png`, `docs/equity.png`.
+
+## Rules and production limits
+
+The rules suite covers workspace ownership, anonymous/cross-user denial, revisions, append-only audit events, forged actors and unsupported workspace IDs. Local startup was blocked by Java 17, so no local emulator pass is claimed. The repository verification workflow provisions Java 21 and runs the emulator/browser suites. Check the workflow's actual result for the deployed commit.
+
+This release does not verify production Firebase OAuth, email sign-in, deployed rule behavior or real confidential financial datasets. Follow DEPLOYMENT.md for those acceptance checks.

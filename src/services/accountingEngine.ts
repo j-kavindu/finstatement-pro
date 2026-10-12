@@ -4,6 +4,7 @@
  */
 
 import {
+  ReportingPeriod,
   TrialBalanceRow,
   AdjustingJournalEntry,
   ProfitAndLossStatement,
@@ -16,38 +17,32 @@ import {
   StatementRow,
 } from '../types/accounting';
 
-// Parse decimal strings before rounding; financial inputs are bounded to safe cents.
-export function roundMoney(amount: number): number {
-  if (!Number.isFinite(amount)) throw new Error('Amount must be finite');
-  const sign = amount < 0 ? -1 : 1;
-  const cents = Math.round((Math.abs(amount) + Number.EPSILON * Math.abs(amount)) * 100);
-  if (!Number.isSafeInteger(cents)) throw new Error('Amount exceeds safe monetary range');
-  return sign * cents / 100;
-}
-export function sumMoney(amounts: number[]): number {
-  const cents = amounts.reduce((s, n) => s + Math.round(roundMoney(n) * 100), 0);
-  if (!Number.isSafeInteger(cents)) throw new Error('Total exceeds safe monetary range');
-  return cents / 100;
-}
+import { roundMoney, sumMoney, validMoney } from './money';
+export { roundMoney, sumMoney } from './money';
+
 export function validateTrialBalance(rows: TrialBalanceRow[]): string[] {
   const errors: string[] = []; const codes = new Set<string>(); const ids = new Set<string>();
   const classifications = ['current_asset','non_current_asset','current_liability','non_current_liability','equity','revenue','cogs','operating_expense','depreciation_expense','interest_expense','tax_expense','other_income','other_expense'];
   for (const row of rows) {
     if (!classifications.includes(row.classification)) errors.push('Unknown account classification');
     const code = String(row.accountCode).trim().toLowerCase();
-    if (!code || codes.has(code) || ids.has(row.accountId)) errors.push('Missing or duplicate account code / ID');
+    if (!code || !row.accountId || !row.accountName?.trim() || codes.has(code) || ids.has(row.accountId)) errors.push('Missing or duplicate account code / ID');
     codes.add(code); ids.add(row.accountId);
-    if (![row.unadjustedDebit,row.unadjustedCredit].every(value=>Number.isFinite(value) && value >= 0) || (row.unadjustedDebit > 0 && row.unadjustedCredit > 0)) errors.push('Invalid trial balance amount');
+    if (![row.unadjustedDebit,row.unadjustedCredit].every(value=>validMoney(value) && value >= 0) || (row.unadjustedDebit > 0 && row.unadjustedCredit > 0)) errors.push('Invalid trial balance amount');
   }
   return errors;
 }
 
-export function validateJournal(entry: AdjustingJournalEntry, rows: TrialBalanceRow[]): string[] {
+export function validateJournal(entry: AdjustingJournalEntry, rows: TrialBalanceRow[], period?: ReportingPeriod): string[] {
   const errors: string[] = [];
+  if (!entry.id || !entry.entryNumber.trim() || !entry.description.trim()) errors.push("Journal identity and description are required");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date) || !Number.isFinite(Date.parse(entry.date)) || new Date(entry.date).toISOString().slice(0, 10) !== entry.date) errors.push("Invalid journal date");
+  if (period && (entry.periodId !== period.id || entry.date < period.startDate || entry.date > period.endDate)) errors.push("Journal must belong to the active reporting period");
+  if (new Set(entry.lines.map(line => line.id)).size !== entry.lines.length) errors.push("Duplicate journal line ID");
   if (entry.lines.length < 2) errors.push('At least two journal lines are required');
   for (const line of entry.lines) {
     if (!rows.some(r => r.accountId === line.accountId)) errors.push('Unknown journal account');
-    if (!Number.isFinite(line.debit) || !Number.isFinite(line.credit) || line.debit < 0 || line.credit < 0 || (line.debit > 0 && line.credit > 0)) errors.push('Invalid debit or credit');
+    if (!validMoney(line.debit) || !validMoney(line.credit) || line.debit < 0 || line.credit < 0 || (line.debit > 0 && line.credit > 0)) errors.push('Invalid debit or credit');
   }
   if (!errors.length) {
     const dr = sumMoney(entry.lines.map(l => l.debit));
@@ -88,7 +83,8 @@ export function formatRatio(value: number | null): string {
  */
 export function calculateAdjustedTrialBalance(
   rows: TrialBalanceRow[],
-  adjustments: AdjustingJournalEntry[]
+  adjustments: AdjustingJournalEntry[],
+  period?: ReportingPeriod
 ): {
   adjustedRows: TrialBalanceRow[];
   totalUnadjustedDebit: number;
@@ -104,18 +100,19 @@ export function calculateAdjustedTrialBalance(
 } {
   const inputErrors = validateTrialBalance(rows);
   if (inputErrors.length) throw new Error(inputErrors.join('; '));
+  if (new Set(adjustments.map(a => a.id)).size !== adjustments.length) throw new Error("Duplicate journal ID");
   const adjustmentsMap = new Map<string, { debit: number; credit: number }>();
 
   // Only take posted adjustments
   const postedAdjustments = adjustments.filter((a) => a.status === 'posted');
 
   postedAdjustments.forEach((adj) => {
-    const errors = validateJournal(adj, rows);
+    const errors = validateJournal(adj, rows, period);
     if (errors.length) throw new Error(`${adj.entryNumber}: ${errors.join("; ")}`);
     adj.lines.forEach((line) => {
       const current = adjustmentsMap.get(line.accountId) || { debit: 0, credit: 0 };
-      current.debit = roundMoney(current.debit + (line.debit || 0));
-      current.credit = roundMoney(current.credit + (line.credit || 0));
+      current.debit = sumMoney([current.debit, line.debit || 0]);
+      current.credit = sumMoney([current.credit, line.credit || 0]);
       adjustmentsMap.set(line.accountId, current);
     });
   });
@@ -133,18 +130,18 @@ export function calculateAdjustedTrialBalance(
     const baseCredit = roundMoney(row.unadjustedCredit || 0);
 
     // If account normally has debit balance or unadjusted has debit
-    const totalDebitAccum = roundMoney(baseDebit + netAdjDebit);
-    const totalCreditAccum = roundMoney(baseCredit + netAdjCredit);
+    const totalDebitAccum = sumMoney([baseDebit, netAdjDebit]);
+    const totalCreditAccum = sumMoney([baseCredit, netAdjCredit]);
 
     if (totalDebitAccum >= totalCreditAccum) {
-      adjustedDebit = roundMoney(totalDebitAccum - totalCreditAccum);
+      adjustedDebit = sumMoney([totalDebitAccum, -totalCreditAccum]);
       adjustedCredit = 0;
     } else {
       adjustedDebit = 0;
-      adjustedCredit = roundMoney(totalCreditAccum - totalDebitAccum);
+      adjustedCredit = sumMoney([totalCreditAccum, -totalDebitAccum]);
     }
 
-    const netDebitCredit = roundMoney(adjustedDebit - adjustedCredit);
+    const netDebitCredit = sumMoney([adjustedDebit, -adjustedCredit]);
 
     return {
       ...row,
@@ -163,8 +160,8 @@ export function calculateAdjustedTrialBalance(
   const totalAdjustedDebit = sumMoney(adjustedRows.map(r => r.adjustedDebit));
   const totalAdjustedCredit = sumMoney(adjustedRows.map(r => r.adjustedCredit));
 
-  const unadjustedDifference = roundMoney(totalUnadjustedDebit - totalUnadjustedCredit);
-  const adjustedDifference = roundMoney(totalAdjustedDebit - totalAdjustedCredit);
+  const unadjustedDifference = sumMoney([totalUnadjustedDebit, -totalUnadjustedCredit]);
+  const adjustedDifference = sumMoney([totalAdjustedDebit, -totalAdjustedCredit]);
 
   return {
     adjustedRows,
@@ -200,8 +197,8 @@ export function generateProfitAndLoss(
     // Normal balance for Revenue is Credit. If contra (sales returns), it has Debit balance and reduces revenue.
     if (r.classification === 'revenue') {
       const netAmount = r.isContra
-        ? -roundMoney(r.adjustedDebit - r.adjustedCredit)
-        : roundMoney(r.adjustedCredit - r.adjustedDebit);
+        ? -sumMoney([r.adjustedDebit, -r.adjustedCredit])
+        : sumMoney([r.adjustedCredit, -r.adjustedDebit]);
 
       revenueRows.push({
         label: r.accountName,
@@ -210,8 +207,8 @@ export function generateProfitAndLoss(
       });
     } else if (r.classification === 'cogs') {
       const netAmount = r.isContra
-        ? -roundMoney(r.adjustedCredit - r.adjustedDebit)
-        : roundMoney(r.adjustedDebit - r.adjustedCredit);
+        ? -sumMoney([r.adjustedCredit, -r.adjustedDebit])
+        : sumMoney([r.adjustedDebit, -r.adjustedCredit]);
 
       cogsRows.push({
         label: r.accountName,
@@ -225,16 +222,16 @@ export function generateProfitAndLoss(
       r.classification === 'tax_expense' ||
       r.classification === 'other_expense'
     ) {
-      const netAmount = roundMoney(r.adjustedDebit - r.adjustedCredit);
+      const netAmount = sumMoney([r.adjustedDebit, -r.adjustedCredit]);
 
       if (r.classification === 'depreciation_expense') {
-        depreciationExpenses = roundMoney(depreciationExpenses + netAmount);
+        depreciationExpenses = sumMoney([depreciationExpenses, netAmount]);
       }
       if (r.classification === 'interest_expense') {
-        interestExpense = roundMoney(interestExpense + netAmount);
+        interestExpense = sumMoney([interestExpense, netAmount]);
       }
       if (r.classification === 'tax_expense') {
-        taxExpense = roundMoney(taxExpense + netAmount);
+        taxExpense = sumMoney([taxExpense, netAmount]);
       }
 
       operatingExpenseRows.push({
@@ -243,7 +240,7 @@ export function generateProfitAndLoss(
         amount: netAmount,
       });
     } else if (r.classification === 'other_income') {
-      const netAmount = roundMoney(r.adjustedCredit - r.adjustedDebit);
+      const netAmount = sumMoney([r.adjustedCredit, -r.adjustedDebit]);
       // Other income is separate from revenue for meaningful gross margins.
       otherIncomeRows.push({
         label: r.accountName,
@@ -255,11 +252,11 @@ export function generateProfitAndLoss(
 
   const totalRevenue = sumMoney(revenueRows.map(r => r.amount));
   const totalCogs = sumMoney(cogsRows.map(r => r.amount));
-  const grossProfit = roundMoney(totalRevenue - totalCogs);
+  const grossProfit = sumMoney([totalRevenue, -totalCogs]);
   const totalOperatingExpenses = sumMoney(operatingExpenseRows.map(r => r.amount));
   const totalOtherIncome = sumMoney(otherIncomeRows.map(r => r.amount));
-  const operatingProfit = roundMoney(grossProfit + totalOtherIncome - (totalOperatingExpenses - interestExpense - taxExpense));
-  const netProfit = roundMoney(grossProfit + totalOtherIncome - totalOperatingExpenses);
+  const operatingProfit = sumMoney([grossProfit, totalOtherIncome, -totalOperatingExpenses, interestExpense, taxExpense]);
+  const netProfit = sumMoney([grossProfit, totalOtherIncome, -totalOperatingExpenses]);
 
   return {
     revenueRows,
@@ -301,8 +298,8 @@ export function generateBalanceSheet(
     if (r.classification === 'current_asset') {
       // Normal balance: Debit. Contra asset (e.g. Allowance for Doubtful Accounts): Credit, reduces asset.
       const amount = r.isContra
-        ? -roundMoney(r.adjustedCredit - r.adjustedDebit)
-        : roundMoney(r.adjustedDebit - r.adjustedCredit);
+        ? -sumMoney([r.adjustedCredit, -r.adjustedDebit])
+        : sumMoney([r.adjustedDebit, -r.adjustedCredit]);
 
       currentAssets.push({
         label: r.accountName,
@@ -313,8 +310,8 @@ export function generateBalanceSheet(
     } else if (r.classification === 'non_current_asset') {
       // Contra asset (e.g. Accumulated Depreciation)
       const amount = r.isContra
-        ? -roundMoney(r.adjustedCredit - r.adjustedDebit)
-        : roundMoney(r.adjustedDebit - r.adjustedCredit);
+        ? -sumMoney([r.adjustedCredit, -r.adjustedDebit])
+        : sumMoney([r.adjustedDebit, -r.adjustedCredit]);
 
       nonCurrentAssets.push({
         label: r.accountName,
@@ -324,8 +321,8 @@ export function generateBalanceSheet(
       });
     } else if (r.classification === 'current_liability') {
       const amount = r.isContra
-        ? -roundMoney(r.adjustedDebit - r.adjustedCredit)
-        : roundMoney(r.adjustedCredit - r.adjustedDebit);
+        ? -sumMoney([r.adjustedDebit, -r.adjustedCredit])
+        : sumMoney([r.adjustedCredit, -r.adjustedDebit]);
 
       currentLiabilities.push({
         label: r.accountName,
@@ -334,8 +331,8 @@ export function generateBalanceSheet(
       });
     } else if (r.classification === 'non_current_liability') {
       const amount = r.isContra
-        ? -roundMoney(r.adjustedDebit - r.adjustedCredit)
-        : roundMoney(r.adjustedCredit - r.adjustedDebit);
+        ? -sumMoney([r.adjustedDebit, -r.adjustedCredit])
+        : sumMoney([r.adjustedCredit, -r.adjustedDebit]);
 
       nonCurrentLiabilities.push({
         label: r.accountName,
@@ -345,8 +342,8 @@ export function generateBalanceSheet(
     } else if (r.classification === 'equity') {
       // If the row is explicit Retained Earnings, we separate opening from current year profit
       const amount = r.isContra
-        ? -roundMoney(r.adjustedDebit - r.adjustedCredit)
-        : roundMoney(r.adjustedCredit - r.adjustedDebit);
+        ? -sumMoney([r.adjustedDebit, -r.adjustedCredit])
+        : sumMoney([r.adjustedCredit, -r.adjustedDebit]);
 
       equityItems.push({
         label: r.accountName,
@@ -359,13 +356,13 @@ export function generateBalanceSheet(
 
   const totalCurrentAssets = sumMoney(currentAssets.map(r => r.amount));
   const totalNonCurrentAssets = sumMoney(nonCurrentAssets.map(r => r.amount));
-  const totalAssets = roundMoney(totalCurrentAssets + totalNonCurrentAssets);
+  const totalAssets = sumMoney([totalCurrentAssets, totalNonCurrentAssets]);
 
   const totalCurrentLiabilities = sumMoney(currentLiabilities.map(r => r.amount));
   const totalNonCurrentLiabilities = roundMoney(
-    nonCurrentLiabilities.reduce((sum, r) => sum + r.amount, 0)
+    sumMoney(nonCurrentLiabilities.map(r => r.amount))
   );
-  const totalLiabilities = roundMoney(totalCurrentLiabilities + totalNonCurrentLiabilities);
+  const totalLiabilities = sumMoney([totalCurrentLiabilities, totalNonCurrentLiabilities]);
 
   // In standard accounting, Trial Balance includes opening equity accounts.
   // The current year profit comes from the Income Statement.
@@ -374,10 +371,10 @@ export function generateBalanceSheet(
   // If equity movement data is explicitly provided, verify compatibility
   const openingRetainedEarnings = equityMovement?.openingRetainedEarnings ?? sumMoney(equityItems.filter(r => r.label.toLowerCase().includes('retained')).map(r => r.amount));
 
-  const totalEquity = roundMoney(openingEquityFromTB + currentYearNetProfit);
+  const totalEquity = sumMoney([openingEquityFromTB, currentYearNetProfit]);
 
-  const totalLiabilitiesAndEquity = roundMoney(totalLiabilities + totalEquity);
-  const reconciliationDifference = roundMoney(totalAssets - totalLiabilitiesAndEquity);
+  const totalLiabilitiesAndEquity = sumMoney([totalLiabilities, totalEquity]);
+  const reconciliationDifference = sumMoney([totalAssets, -totalLiabilitiesAndEquity]);
   const isReconciled = Math.abs(reconciliationDifference) < 0.01;
 
   return {
@@ -410,20 +407,18 @@ export function generateChangesInEquity(
   balanceSheetEquityRows: StatementRow[]
 ): ChangesInEquityStatement {
   const openingShareCapital = equityMovement?.openingShareCapital ?? 
-    balanceSheetEquityRows
-      .filter((r) => r.label.toLowerCase().includes('share') || r.label.toLowerCase().includes('capital'))
-      .reduce((s, r) => s + r.amount, 0);
+    sumMoney(balanceSheetEquityRows
+      .filter((r) => r.label.toLowerCase().includes('share') || r.label.toLowerCase().includes('capital')).map(r => r.amount));
 
   const openingRetainedEarnings = equityMovement?.openingRetainedEarnings ??
-    balanceSheetEquityRows
-      .filter((r) => r.label.toLowerCase().includes('retained'))
-      .reduce((s, r) => s + r.amount, 0);
+    sumMoney(balanceSheetEquityRows
+      .filter((r) => r.label.toLowerCase().includes('retained')).map(r => r.amount));
 
   const shareCapitalMovements = equityMovement?.shareIssuance ?? 0;
   const dividendsPaid = equityMovement?.dividendsDeclared ?? 0;
 
-  const closingShareCapital = roundMoney(openingShareCapital + shareCapitalMovements);
-  const closingRetainedEarnings = roundMoney(openingRetainedEarnings + netProfit - dividendsPaid);
+  const closingShareCapital = sumMoney([openingShareCapital, shareCapitalMovements]);
+  const closingRetainedEarnings = sumMoney([openingRetainedEarnings, netProfit, -dividendsPaid]);
   const closingTotalEquity = sumMoney([closingShareCapital, closingRetainedEarnings, equityMovement?.openingOtherReserves ?? 0, equityMovement?.otherComprehensiveIncome ?? 0]);
   const openingTotal = sumMoney([openingShareCapital, openingRetainedEarnings, equityMovement?.openingOtherReserves ?? 0]);
 
@@ -458,7 +453,7 @@ export function generateIndirectCashFlow(
     return {
       isAvailable: false,
       unavailableReason:
-        'Comparative Balance Sheet and complete supplementary cash movement data are required. Under professional accounting standards (IAS 7 / ASC 230), indirect cash flows cannot be deduced from a single closing trial balance.',
+        'Comparative Balance Sheet and complete supplementary cash movement data are required. This draft model does not infer cash flow from one closing trial balance.',
       operatingActivities: [],
       netCashFromOperating: 0,
       investingActivities: [],
@@ -505,39 +500,33 @@ export function generateIndirectCashFlow(
 
   // Working Capital Adjustments
   // Accounts Receivable: Change = Prior - Current (increase in AR is cash outflow)
-  const currentAR = currentBalanceSheet.currentAssets
-    .filter((a) => a.label.toLowerCase().includes('receivable'))
-    .reduce((s, a) => s + a.amount, 0);
-  const priorAR = priorBalanceSheet.currentAssets
-    .filter((a) => a.label.toLowerCase().includes('receivable'))
-    .reduce((s, a) => s + a.amount, 0);
-  const changeAR = roundMoney(priorAR - currentAR);
+  const currentAR = sumMoney(currentBalanceSheet.currentAssets
+    .filter((a) => a.label.toLowerCase().includes('receivable')).map(a => a.amount));
+  const priorAR = sumMoney(priorBalanceSheet.currentAssets
+    .filter((a) => a.label.toLowerCase().includes('receivable')).map(a => a.amount));
+  const changeAR = sumMoney([priorAR, -currentAR]);
   operatingActivities.push({
     label: '(Increase) / decrease in Accounts Receivable',
     amount: changeAR,
   });
 
   // Inventories: Change = Prior - Current (increase in Inventory is cash outflow)
-  const currentInv = currentBalanceSheet.currentAssets
-    .filter((a) => a.label.toLowerCase().includes('inventor') || a.label.toLowerCase().includes('stock'))
-    .reduce((s, a) => s + a.amount, 0);
-  const priorInv = priorBalanceSheet.currentAssets
-    .filter((a) => a.label.toLowerCase().includes('inventor') || a.label.toLowerCase().includes('stock'))
-    .reduce((s, a) => s + a.amount, 0);
-  const changeInv = roundMoney(priorInv - currentInv);
+  const currentInv = sumMoney(currentBalanceSheet.currentAssets
+    .filter((a) => a.label.toLowerCase().includes('inventor') || a.label.toLowerCase().includes('stock')).map(a => a.amount));
+  const priorInv = sumMoney(priorBalanceSheet.currentAssets
+    .filter((a) => a.label.toLowerCase().includes('inventor') || a.label.toLowerCase().includes('stock')).map(a => a.amount));
+  const changeInv = sumMoney([priorInv, -currentInv]);
   operatingActivities.push({
     label: '(Increase) / decrease in Inventories',
     amount: changeInv,
   });
 
   // Prepayments and other current assets:
-  const currentPrepay = currentBalanceSheet.currentAssets
-    .filter((a) => a.label.toLowerCase().includes('prepaid') || a.label.toLowerCase().includes('prepayment'))
-    .reduce((s, a) => s + a.amount, 0);
-  const priorPrepay = priorBalanceSheet.currentAssets
-    .filter((a) => a.label.toLowerCase().includes('prepaid') || a.label.toLowerCase().includes('prepayment'))
-    .reduce((s, a) => s + a.amount, 0);
-  const changePrepay = roundMoney(priorPrepay - currentPrepay);
+  const currentPrepay = sumMoney(currentBalanceSheet.currentAssets
+    .filter((a) => a.label.toLowerCase().includes('prepaid') || a.label.toLowerCase().includes('prepayment')).map(a => a.amount));
+  const priorPrepay = sumMoney(priorBalanceSheet.currentAssets
+    .filter((a) => a.label.toLowerCase().includes('prepaid') || a.label.toLowerCase().includes('prepayment')).map(a => a.amount));
+  const changePrepay = sumMoney([priorPrepay, -currentPrepay]);
   if (currentPrepay > 0 || priorPrepay > 0) {
     operatingActivities.push({
       label: '(Increase) / decrease in Prepayments and other assets',
@@ -546,26 +535,22 @@ export function generateIndirectCashFlow(
   }
 
   // Accounts Payable: Change = Current - Prior (increase in AP is cash inflow / deferred cash outflow)
-  const currentAP = currentBalanceSheet.currentLiabilities
-    .filter((l) => l.label.toLowerCase().includes('payable') && !/tax|interest|accru/i.test(l.label))
-    .reduce((s, l) => s + l.amount, 0);
-  const priorAP = priorBalanceSheet.currentLiabilities
-    .filter((l) => l.label.toLowerCase().includes('payable') && !/tax|interest|accru/i.test(l.label))
-    .reduce((s, l) => s + l.amount, 0);
-  const changeAP = roundMoney(currentAP - priorAP);
+  const currentAP = sumMoney(currentBalanceSheet.currentLiabilities
+    .filter((l) => l.label.toLowerCase().includes('payable') && !/tax|interest|accru/i.test(l.label)).map(l => l.amount));
+  const priorAP = sumMoney(priorBalanceSheet.currentLiabilities
+    .filter((l) => l.label.toLowerCase().includes('payable') && !/tax|interest|accru/i.test(l.label)).map(l => l.amount));
+  const changeAP = sumMoney([currentAP, -priorAP]);
   operatingActivities.push({
     label: 'Increase / (decrease) in Accounts Payable & Trade Payables',
     amount: changeAP,
   });
 
   // Accrued Liabilities:
-  const currentAccrued = currentBalanceSheet.currentLiabilities
-    .filter((l) => l.label.toLowerCase().includes('accrued') || l.label.toLowerCase().includes('accrual'))
-    .reduce((s, l) => s + l.amount, 0);
-  const priorAccrued = priorBalanceSheet.currentLiabilities
-    .filter((l) => l.label.toLowerCase().includes('accrued') || l.label.toLowerCase().includes('accrual'))
-    .reduce((s, l) => s + l.amount, 0);
-  const changeAccrued = roundMoney(currentAccrued - priorAccrued);
+  const currentAccrued = sumMoney(currentBalanceSheet.currentLiabilities
+    .filter((l) => l.label.toLowerCase().includes('accrued') || l.label.toLowerCase().includes('accrual')).map(l => l.amount));
+  const priorAccrued = sumMoney(priorBalanceSheet.currentLiabilities
+    .filter((l) => l.label.toLowerCase().includes('accrued') || l.label.toLowerCase().includes('accrual')).map(l => l.amount));
+  const changeAccrued = sumMoney([currentAccrued, -priorAccrued]);
   if (currentAccrued > 0 || priorAccrued > 0) {
     operatingActivities.push({
       label: 'Increase / (decrease) in Accrued expenses',
@@ -621,25 +606,21 @@ export function generateIndirectCashFlow(
   }
   const netCashFromFinancing = sumMoney(financingActivities.map(r => r.amount));
 
-  const netChangeInCash = roundMoney(
-    netCashFromOperating + netCashFromInvesting + netCashFromFinancing
-  );
+  const netChangeInCash = sumMoney([netCashFromOperating, netCashFromInvesting, netCashFromFinancing]);
 
   // Cash balances from Balance Sheet Cash accounts
   const openingCash = roundMoney(
-    priorBalanceSheet.currentAssets
-      .filter((a) => a.label.toLowerCase().includes('cash') || a.label.toLowerCase().includes('bank'))
-      .reduce((s, a) => s + a.amount, 0)
+    sumMoney(priorBalanceSheet.currentAssets
+      .filter((a) => a.label.toLowerCase().includes('cash') || a.label.toLowerCase().includes('bank')).map(a => a.amount))
   );
 
   const closingCashBalanceSheet = roundMoney(
-    currentBalanceSheet.currentAssets
-      .filter((a) => a.label.toLowerCase().includes('cash') || a.label.toLowerCase().includes('bank'))
-      .reduce((s, a) => s + a.amount, 0)
+    sumMoney(currentBalanceSheet.currentAssets
+      .filter((a) => a.label.toLowerCase().includes('cash') || a.label.toLowerCase().includes('bank')).map(a => a.amount))
   );
 
-  const closingCashCalculated = roundMoney(openingCash + netChangeInCash);
-  const cashReconciliationDifference = roundMoney(closingCashCalculated - closingCashBalanceSheet);
+  const closingCashCalculated = sumMoney([openingCash, netChangeInCash]);
+  const cashReconciliationDifference = sumMoney([closingCashCalculated, -closingCashBalanceSheet]);
   const isCashReconciled = Math.abs(cashReconciliationDifference) < 0.01;
 
   return {
@@ -702,14 +683,13 @@ export function calculateFinancialRatios(
 
   // Quick Ratio = (Cash + Marketable Securities + Receivables) / Current Liabilities
   const quickAssets = roundMoney(
-    bs.currentAssets
+    sumMoney(bs.currentAssets
       .filter(
         (a) =>
           a.label.toLowerCase().includes('cash') ||
           a.label.toLowerCase().includes('receivable') ||
           a.label.toLowerCase().includes('bank')
-      )
-      .reduce((s, a) => s + a.amount, 0)
+      ).map(a => a.amount))
   );
 
   if (bs.totalCurrentLiabilities > 0) {

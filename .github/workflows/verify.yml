@@ -29,4 +29,7 @@ jobs:
           path: |
             docs/dashboard.png
             docs/mobile.png
+            docs/import-mapping.png
+            docs/journals.png
+            docs/equity.png
           if-no-files-found: ignore

@@ -18,7 +18,7 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({
   const [name, setName] = useState('');
   const [industry, setIndustry] = useState('Technology & Software');
   const [currency, setCurrency] = useState('USD');
-  const [framework, setFramework] = useState<'IFRS-aligned' | 'US-GAAP-aligned' | 'SME-Standard'>('IFRS-aligned');
+  const [framework, setFramework] = useState<Company['reportingFramework']>('General-purpose draft');
 
   if (!isOpen) return null;
 
@@ -104,7 +104,8 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({
                 onChange={(e) => setFramework(e.target.value as any)}
                 className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"
               >
-                <option value="IFRS-aligned">IFRS-aligned</option>
+                <option value="General-purpose draft">General-purpose draft</option>
+                <option value="IFRS-aligned">IFRS presentation preference (unverified)</option>
                 <option value="US-GAAP-aligned">US-GAAP-aligned</option>
                 <option value="SME-Standard">SME Standard</option>
               </select>

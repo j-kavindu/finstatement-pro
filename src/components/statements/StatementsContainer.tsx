@@ -21,7 +21,7 @@ import {
   SupplementaryCashFlowData,
   EquityMovementData,
 } from '../../types/accounting';
-import { formatCurrency, formatPercent } from '../../services/accountingEngine';
+import { formatCurrency, formatPercent, sumMoney } from '../../services/accountingEngine';
 
 interface StatementsContainerProps {
   company: Company;
@@ -196,7 +196,7 @@ export const StatementsContainer: React.FC<StatementsContainerProps> = ({
 
       {/* 1. STATEMENT OF PROFIT OR LOSS */}
       {activeStatement === 'pnl' && (
-        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-6 space-y-6 print-card">
+        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-3 sm:p-6 space-y-6 print-card">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div>
               <h3 className="text-base font-bold text-white">
@@ -320,7 +320,7 @@ export const StatementsContainer: React.FC<StatementsContainerProps> = ({
 
       {/* 2. STATEMENT OF FINANCIAL POSITION (BALANCE SHEET) */}
       {activeStatement === 'balance-sheet' && (
-        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-6 space-y-6 print-card">
+        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-3 sm:p-6 space-y-6 print-card">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
             <div>
               <h3 className="text-base font-bold text-white">
@@ -508,13 +508,13 @@ export const StatementsContainer: React.FC<StatementsContainerProps> = ({
 
       {/* 3. STATEMENT OF CHANGES IN EQUITY */}
       {activeStatement === 'equity' && (
-        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-6 space-y-6 print-card">
+        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-3 sm:p-6 space-y-6 print-card">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div>
               <h3 className="text-base font-bold text-white">
                 Draft Statement of Changes in Equity
               </h3>
-              <button onClick={()=>setEditingEquity(!editingEquity)} className="px-3 py-2 bg-slate-800 rounded text-xs">Edit equity movements</button>
+              <button type="button" onClick={()=>{if(equityMovement) setEquityForm(equityMovement);setEditingEquity(true);}} className="px-3 py-2 bg-slate-800 rounded text-xs">Edit equity movements</button>
               <p className="text-xs text-slate-400">
                 Opening balances, comprehensive income rollforward, and capital movements for {period.name}.
               </p>
@@ -531,89 +531,23 @@ export const StatementsContainer: React.FC<StatementsContainerProps> = ({
           {eq.closingTotalEquity !== bs.totalEquity && <p role="alert" className="text-amber-300 text-xs">Equity rollforward does not reconcile to the balance sheet.</p>}
           {editingEquity && <form className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs" onSubmit={event=>{event.preventDefault();if(period.status === 'closed') {alert('Closed periods cannot be edited');return;}onUpdateEquityMovement({...equityForm,periodId:period.id});setEditingEquity(false);}}>
             {Object.entries(equityForm).filter(([key])=>key !== 'periodId').map(([key,value])=><label key={key}>{key.replace(/([A-Z])/g,' $1')}<input required aria-label={key} type="number" step="0.01" value={Number(value)} onChange={event=>setEquityForm({...equityForm,[key]:Number(event.target.value)})} className="block w-full p-2 bg-slate-900 border border-slate-700 rounded" /></label>)}
-            <label><input type="checkbox" required /> Opening amounts and movements are verified; movements are already posted to the ledger.</label><button type="submit" className="bg-blue-600 p-2 rounded">Apply equity movements</button>
+            <label><input type="checkbox" required /> Opening amounts and movements are verified; movements are already posted to the ledger.</label><button type="submit" className="bg-blue-600 p-2 rounded">Apply equity movements</button><button type="button" onClick={()=>setEditingEquity(false)} className="bg-slate-800 p-2 rounded">Cancel equity edit</button>
           </form>}
           <div className="overflow-x-auto text-xs">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-900 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[11px]">
-                  <th className="py-2.5 px-3">Equity Movement Component<br/><span className="normal-case">Opening reserves: {formatCurrency(eq.openingOtherReserves ?? 0,curr)}; OCI: {formatCurrency(eq.otherComprehensiveIncome ?? 0,curr)}</span></th>
-                  <th className="py-2.5 px-3 text-right">Share Capital</th>
-                  <th className="py-2.5 px-3 text-right">Retained Earnings</th>
-                  <th className="py-2.5 px-3 text-right font-bold text-white">Total Equity</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/80">
-                <tr className="hover:bg-slate-800/30">
-                  <td className="py-2.5 px-3 font-medium text-slate-200">
-                    Balance at Beginning of Period ({period.startDate})
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    {formatCurrency(eq.openingShareCapital, curr)}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    {formatCurrency(eq.openingRetainedEarnings, curr)}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-100">
-                    {formatCurrency(eq.openingTotal, curr)}
-                  </td>
-                </tr>
-
-                <tr className="hover:bg-slate-800/30 text-emerald-400">
-                  <td className="py-2.5 px-3 font-medium pl-6">
-                    + Net Profit for the Reporting Period
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono">—</td>
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    {formatCurrency(eq.netProfitForPeriod, curr)}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-semibold">
-                    {formatCurrency(eq.netProfitForPeriod, curr)}
-                  </td>
-                </tr>
-
-                <tr className="hover:bg-slate-800/30 text-slate-300">
-                  <td className="py-2.5 px-3 font-medium pl-6">
-                    + Shares Issued / Capital Raised
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    {eq.shareCapitalMovements > 0 ? formatCurrency(eq.shareCapitalMovements, curr) : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono">—</td>
-                  <td className="py-2.5 px-3 text-right font-mono font-semibold">
-                    {eq.shareCapitalMovements > 0 ? formatCurrency(eq.shareCapitalMovements, curr) : '—'}
-                  </td>
-                </tr>
-
-                <tr className="hover:bg-slate-800/30 text-amber-400">
-                  <td className="py-2.5 px-3 font-medium pl-6">
-                    - Dividends Declared / Distributed to Shareholders
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono">—</td>
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    {eq.dividendsPaid > 0 ? `(${formatCurrency(eq.dividendsPaid, curr)})` : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-semibold">
-                    {eq.dividendsPaid > 0 ? `(${formatCurrency(eq.dividendsPaid, curr)})` : '—'}
-                  </td>
-                </tr>
+            <table className="w-full min-w-[650px] text-left border-collapse">
+              <thead><tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                {['Equity movement', 'Share capital', 'Retained earnings', 'Other reserves', 'Total equity'].map((label,index) => <th key={label} className={`p-3 ${index ? 'text-right' : ''}`}>{label}</th>)}
+              </tr></thead>
+              <tbody className="divide-y divide-slate-800">
+                {[
+                  ['Opening balance', eq.openingShareCapital, eq.openingRetainedEarnings, eq.openingOtherReserves ?? 0, eq.openingTotal],
+                  ['Profit / (loss)', 0, eq.netProfitForPeriod, 0, eq.netProfitForPeriod],
+                  ['Shares issued', eq.shareCapitalMovements, 0, 0, eq.shareCapitalMovements],
+                  ['Dividends declared', 0, -eq.dividendsPaid, 0, -eq.dividendsPaid],
+                  ['Other comprehensive income', 0, 0, eq.otherComprehensiveIncome ?? 0, eq.otherComprehensiveIncome ?? 0],
+                  ['Closing balance', eq.closingShareCapital, eq.closingRetainedEarnings, sumMoney([eq.openingOtherReserves ?? 0, eq.otherComprehensiveIncome ?? 0]), eq.closingTotalEquity],
+                ].map((row,index) => <tr key={index} className={index === 5 ? 'font-bold bg-slate-900 text-blue-300' : ''}>{row.map((value,column) => <td key={column} className={`p-3 ${column ? 'text-right font-mono whitespace-nowrap' : 'text-slate-300'}`}>{column ? formatCurrency(Number(value),curr) : value}</td>)}</tr>)}
               </tbody>
-              <tfoot className="bg-slate-900 border-t-2 border-slate-700 font-bold text-xs">
-                <tr>
-                  <td className="py-3 px-3 uppercase text-slate-200">
-                    Balance at End of Period ({period.endDate})
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono text-white">
-                    {formatCurrency(eq.closingShareCapital, curr)}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono text-white">
-                    {formatCurrency(eq.closingRetainedEarnings, curr)}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono text-blue-300">
-                    {formatCurrency(eq.closingTotalEquity, curr)}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>
@@ -621,7 +555,7 @@ export const StatementsContainer: React.FC<StatementsContainerProps> = ({
 
       {/* 4. STATEMENT OF CASH FLOWS (INDIRECT METHOD) */}
       {activeStatement === 'cash-flow' && (
-        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-6 space-y-6 print-card">
+        <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-3 sm:p-6 space-y-6 print-card">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">

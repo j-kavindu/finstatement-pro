@@ -16,7 +16,7 @@ import {
   Company,
   ReportingPeriod,
 } from '../../types/accounting';
-import { formatCurrency, roundMoney } from '../../services/accountingEngine';
+import { formatCurrency, roundMoney, sumMoney } from '../../services/accountingEngine';
 
 interface AdjustmentsViewProps {
   company: Company;
@@ -120,8 +120,8 @@ export const AdjustmentsView: React.FC<AdjustmentsViewProps> = ({
     setLines(lines.filter((_, i) => i !== index));
   };
 
-  const totalDr = roundMoney(lines.reduce((s, l) => s + (l.debit || 0), 0));
-  const totalCr = roundMoney(lines.reduce((s, l) => s + (l.credit || 0), 0));
+  const totalDr = sumMoney(lines.map(line => line.debit));
+  const totalCr = sumMoney(lines.map(line => line.credit));
   const difference = roundMoney(totalDr - totalCr);
   const isBalanced = Math.abs(difference) < 0.01 && totalDr > 0;
 
@@ -150,7 +150,7 @@ export const AdjustmentsView: React.FC<AdjustmentsViewProps> = ({
       createdAt: editingEntry?.createdAt || new Date().toISOString(),
     };
 
-    if (status === "posted") { const errors = validateJournal(newAdjustment, accounts); if (errors.length) { alert(errors.join("\n")); return; } }
+    if (status === "posted") { const errors = validateJournal(newAdjustment, accounts, period); if (errors.length) { alert(errors.join("\n")); return; } }
     if (editingEntry) {
       onUpdateAdjustments(adjustments.map((a) => (a.id === editingEntry.id ? newAdjustment : a)));
       onAuditAction('Adjustment Updated', `Updated entry ${newAdjustment.entryNumber} (${status})`);
@@ -168,7 +168,7 @@ export const AdjustmentsView: React.FC<AdjustmentsViewProps> = ({
 
     if (target.status === 'posted') { alert('Posted entries are immutable. Create a reversing journal instead.'); return; }
     const newStatus = 'posted';
-    if (newStatus === 'posted' && validateJournal(target, accounts).length) {
+    if (newStatus === 'posted' && validateJournal(target, accounts, period).length) {
       alert('Cannot post unbalanced entry.');
       return;
     }
@@ -323,8 +323,8 @@ export const AdjustmentsView: React.FC<AdjustmentsViewProps> = ({
 
       {/* New Adjusting Entry Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-xl max-w-3xl w-full p-6 space-y-5 shadow-2xl">
+        <div role="dialog" aria-modal="true" aria-label="Adjusting journal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-[#0f172a] border border-slate-700 rounded-xl max-w-3xl w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="text-base font-bold text-white">

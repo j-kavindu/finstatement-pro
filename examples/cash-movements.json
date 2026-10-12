@@ -1,0 +1,15 @@
+{
+  "periodId": "period-fy2025",
+  "depreciationAmortization": 18500,
+  "gainLossOnDisposal": 0,
+  "interestExpense": 4000,
+  "incomeTaxPaid": 8000,
+  "interestPaid": 4000,
+  "capexAdditions": 20000,
+  "proceedsFromDisposal": 0,
+  "debtIssued": 0,
+  "debtRepaid": 10000,
+  "sharesIssued": 0,
+  "dividendsPaid": 5000,
+  "notes": "Cash paid for capex, loan principal and dividends verified against synthetic transaction register. Interest and tax classified as operating."
+}

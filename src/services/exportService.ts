@@ -16,7 +16,8 @@ import {
   Company,
   ReportingPeriod,
 } from '../types/accounting';
-import { formatCurrency, formatPercent } from './accountingEngine';
+import { ReportCheck, assertReportReady } from './reportValidation';
+import { formatCurrency, formatPercent, sumMoney } from './accountingEngine';
 
 export function csvCell(value: string): string {
   const safe = /^[=+@-]/.test(value) ? "'" + value : value;
@@ -52,8 +53,8 @@ export function exportTrialBalanceCSV(
   ];
 
   const lines = [
-    `"${company.name} - Trial Balance"`,
-    `"Period: ${period.name} (${period.startDate} to ${period.endDate})"`,
+    csvCell(`${company.name} - Trial Balance`),
+    csvCell(`Period: ${period.name} (${period.startDate} to ${period.endDate})`),
     csvCell(`Currency: ${company.currency} | DRAFT — not independently reviewed`),
     '',
     headers.join(','),
@@ -74,10 +75,10 @@ export function exportTrialBalanceCSV(
     );
   });
 
-  const totalUnadjDr = rows.reduce((s, r) => s + r.unadjustedDebit, 0);
-  const totalUnadjCr = rows.reduce((s, r) => s + r.unadjustedCredit, 0);
-  const totalAdjDr = rows.reduce((s, r) => s + r.adjustedDebit, 0);
-  const totalAdjCr = rows.reduce((s, r) => s + r.adjustedCredit, 0);
+  const totalUnadjDr = sumMoney(rows.map(r => r.unadjustedDebit));
+  const totalUnadjCr = sumMoney(rows.map(r => r.unadjustedCredit));
+  const totalAdjDr = sumMoney(rows.map(r => r.adjustedDebit));
+  const totalAdjCr = sumMoney(rows.map(r => r.adjustedCredit));
 
   lines.push('');
   lines.push(
@@ -104,9 +105,18 @@ export function exportFullFinancialWorkbookXLSX(
   bs: BalanceSheetStatement,
   eq: ChangesInEquityStatement,
   cf: CashFlowStatement,
-  ratios: RatioItem[]
+  ratios: RatioItem[],
+  checks: ReportCheck[] = []
 ) {
+  assertReportReady(checks);
+  if (!rows.length || sumMoney(rows.flatMap(row => [row.adjustedDebit, -row.adjustedCredit])) !== 0) throw new Error('Trial balance must balance before statement export');
+  assertStatementsReconcile(bs, eq);
   const wb = XLSX.utils.book_new();
+  if (checks.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Status', 'DRAFT - mathematical checks only; no compliance certification'],
+    ['Control', 'Result', 'Difference', 'Explanation'],
+    ...checks.map(check => [check.title, check.status, check.difference ?? '', check.detail])
+  ]), 'Validation');
 
   // Sheet 1: Trial Balance
   const tbData = [
@@ -201,14 +211,13 @@ export function exportFullFinancialWorkbookXLSX(
     ['Company', company.name],
     ['Statement of Changes in Equity', period.name],
     [],
-    ['Line Item', 'Share Capital', 'Retained Earnings', 'Total Equity'],
-    ['Opening Balance', eq.openingShareCapital, eq.openingRetainedEarnings, eq.openingTotal],
-    ['Net Profit for Period', 0, eq.netProfitForPeriod, eq.netProfitForPeriod],
-    ['Shares Issued / Capital Raised', eq.shareCapitalMovements, 0, eq.shareCapitalMovements],
-    ['Dividends Paid', 0, -eq.dividendsPaid, -eq.dividendsPaid],
-    ['Opening other reserves', '', '', eq.openingOtherReserves ?? 0],
-    ['Other comprehensive income', '', '', eq.otherComprehensiveIncome ?? 0],
-    ['Closing Balance', eq.closingShareCapital, eq.closingRetainedEarnings, eq.closingTotalEquity],
+    ['Line Item', 'Share Capital', 'Retained Earnings', 'Other Reserves', 'Total Equity'],
+    ['Opening Balance', eq.openingShareCapital, eq.openingRetainedEarnings, eq.openingOtherReserves ?? 0, eq.openingTotal],
+    ['Net Profit for Period', 0, eq.netProfitForPeriod, 0, eq.netProfitForPeriod],
+    ['Shares Issued / Capital Raised', eq.shareCapitalMovements, 0, 0, eq.shareCapitalMovements],
+    ['Dividends Declared', 0, -eq.dividendsPaid, 0, -eq.dividendsPaid],
+    ['Other comprehensive income', 0, 0, eq.otherComprehensiveIncome ?? 0, eq.otherComprehensiveIncome ?? 0],
+    ['Closing Balance', eq.closingShareCapital, eq.closingRetainedEarnings, sumMoney([eq.openingOtherReserves ?? 0, eq.otherComprehensiveIncome ?? 0]), eq.closingTotalEquity],
   ];
   const wsEQ = XLSX.utils.aoa_to_sheet(eqData);
   XLSX.utils.book_append_sheet(wb, wsEQ, 'Changes in Equity');
@@ -273,8 +282,11 @@ export function exportExecutivePDF(
   bs: BalanceSheetStatement,
   eq: ChangesInEquityStatement,
   cf: CashFlowStatement,
-  ratios: RatioItem[]
+  ratios: RatioItem[],
+  checks: ReportCheck[] = []
 ) {
+  assertReportReady(checks);
+  assertStatementsReconcile(bs, eq);
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -392,7 +404,7 @@ export function exportExecutivePDF(
     ['Opening Total Equity', formatCurrency(eq.openingTotal, curr)],
     ['Net Profit for Current Period', formatCurrency(eq.netProfitForPeriod, curr)],
     ['Share Capital Issuances', formatCurrency(eq.shareCapitalMovements, curr)],
-    ['Dividends Paid to Shareholders', `(${formatCurrency(eq.dividendsPaid, curr)})`],
+    ['Dividends declared', `(${formatCurrency(eq.dividendsPaid, curr)})`],
     ['Opening other reserves (included in opening total)', formatCurrency(eq.openingOtherReserves ?? 0, curr)],
     ['Other comprehensive income', formatCurrency(eq.otherComprehensiveIncome ?? 0, curr)],
     ['Closing Total Equity', formatCurrency(eq.closingTotalEquity, curr)],
@@ -472,5 +484,15 @@ export function exportExecutivePDF(
     { maxWidth: 182 }
   );
 
+  if (checks.length) {
+    doc.addPage();
+    doc.setFontSize(14); doc.text('DRAFT - Reporting controls', 14, 20);
+    autoTable(doc, { startY: 28, head: [['Control', 'Status', 'Difference', 'Review note']], body: checks.map(check => [check.title, check.status, check.difference === undefined ? 'N/A' : formatCurrency(check.difference, curr), check.detail]), styles: { fontSize: 8 }, columnStyles: { 3: { cellWidth: 90 } } });
+  }
   doc.save(`${company.name.replace(/\s+/g, '_')}_Financial_Report_${period.name}.pdf`);
+}
+
+export function assertStatementsReconcile(bs: BalanceSheetStatement, eq: ChangesInEquityStatement) {
+  if (sumMoney([bs.totalAssets, -bs.totalLiabilities, -bs.totalEquity]) !== 0) throw new Error('Financial position does not reconcile');
+  if (sumMoney([eq.closingTotalEquity, -bs.totalEquity]) !== 0) throw new Error('Equity movement does not reconcile');
 }

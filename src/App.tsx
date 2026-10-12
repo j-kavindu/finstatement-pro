@@ -4,9 +4,13 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User } from 'firebase/auth';
+import { ValidationPanel } from './components/validation/ValidationPanel';
+import { validateReportReadiness, assertReportReady } from './services/reportValidation';
+import { validateEquityMovement, validateWorkspace, validateLedger } from './services/workspaceValidation';
 import { Menu } from 'lucide-react';
 import {
   Company,
+  LedgerWorkspace,
   ReportingPeriod,
   TrialBalanceRow,
   AdjustingJournalEntry,
@@ -79,8 +83,8 @@ export default function App() {
   // Financial Data State for Current Period
   const [tbRows, setTbRows] = useState<TrialBalanceRow[]>(SAMPLE_TB_FY2025);
   const [adjustments, setAdjustments] = useState<AdjustingJournalEntry[]>(SAMPLE_ADJUSTMENTS_FY2025);
-  const [supplementary, setSupplementary] = useState<SupplementaryCashFlowData>(SAMPLE_SUPPLEMENTARY_FY2025);
-  const [equityMovement, setEquityMovement] = useState<EquityMovementData>(SAMPLE_EQUITY_FY2025);
+  const [supplementary, setSupplementary] = useState<SupplementaryCashFlowData | undefined>(SAMPLE_SUPPLEMENTARY_FY2025);
+  const [equityMovement, setEquityMovement] = useState<EquityMovementData | undefined>(SAMPLE_EQUITY_FY2025);
 
   // Comparative Prior Period Data (For indirect cash flow and comparative reports)
   const [comparativeTbRows, setComparativeTbRows] = useState<TrialBalanceRow[]>(SAMPLE_TB_FY2024);
@@ -107,7 +111,7 @@ export default function App() {
   const [syncMessage, setSyncMessage] = useState('Demo: in-memory synthetic data. Sign in to load a cloud workspace.');
   const [cloudReady, setCloudReady] = useState(false);
   const revision = useRef(0);
-  const [ledgers, setLedgers] = useState<Record<string, any>>({});
+  const [ledgers, setLedgers] = useState<Record<string, LedgerWorkspace>>({});
   const ledgerKey = `${selectedCompany.id}:${selectedPeriod.id}`;
   const activeKey = useRef(ledgerKey);
   const currentLedger = { tbRows, adjustments, supplementary, equityMovement, comparativeTbRows, auditLogs, versionSnapshots };
@@ -157,8 +161,7 @@ export default function App() {
       revision.current = document?.revision ?? 0;
       const data = document?.payload;
       if (data) {
-        if (!Array.isArray(data.companies) || !Array.isArray(data.periods) || !data.selectedCompany || !data.selectedPeriod) throw new Error('Invalid workspace structure');
-        calculateAdjustedTrialBalance(data.tbRows ?? [], data.adjustments ?? []);
+        validateWorkspace(data);
         setCompanies(data.companies); setSelectedCompany(data.selectedCompany);
         setPeriods(data.periods); setSelectedPeriod(data.selectedPeriod);
         activeKey.current = `${data.selectedCompany.id}:${data.selectedPeriod.id}`;
@@ -178,7 +181,7 @@ export default function App() {
     setCloudReady(false); setSyncMessage('Saving…');
     try {
       revision.current = await saveWorkspace(currentUser.uid, {
-        companies: companies.map(c => ({ ...c, ownerId: currentUser.uid })), selectedCompany: { ...selectedCompany, ownerId: currentUser.uid },
+        schemaVersion: 1, companies: companies.map(c => ({ ...c, ownerId: currentUser.uid })), selectedCompany: { ...selectedCompany, ownerId: currentUser.uid },
         periods, selectedPeriod, ...currentLedger, ledgers: { ...ledgers, [ledgerKey]: currentLedger }
       }, revision.current);
       setSyncMessage('Saved to your private cloud workspace.'); setCloudReady(true);
@@ -193,7 +196,7 @@ export default function App() {
         companyId: selectedCompany.id,
         periodId: selectedPeriod.id,
         timestamp: new Date().toISOString(),
-        actorEmail: currentUser?.email || 'authenticated.portfolio.user',
+        actorEmail: currentUser?.email || 'demo.user',
         action,
         details,
       };
@@ -202,10 +205,13 @@ export default function App() {
     [selectedCompany.id, selectedPeriod.id, currentUser]
   );
 
+  // During a period selection render, rows still belong to the previous ledger until the switch effect commits.
+  const calculationPeriod = periods.find(p => `${p.companyId}:${p.id}` === activeKey.current) ?? selectedPeriod;
+
   // 1. Calculate Adjusted Trial Balance
   const tbCalculations = useMemo(() => {
-    return calculateAdjustedTrialBalance(tbRows, adjustments);
-  }, [tbRows, adjustments]);
+    return calculateAdjustedTrialBalance(tbRows, adjustments, calculationPeriod);
+  }, [tbRows, adjustments, calculationPeriod]);
 
   // 2. Generate Statement of Profit or Loss
   const pnl = useMemo(() => {
@@ -238,6 +244,8 @@ export default function App() {
     return generateIndirectCashFlow(bs, comparativeBs, pnl, supplementary);
   }, [bs, comparativeBs, pnl, supplementary]);
 
+  const reportChecks = validateReportReadiness(tbCalculations.adjustedRows, bs, eq, equityMovement, comparativeBs, cf);
+
   // 7. Calculate Financial Ratios
   const ratios = useMemo(() => {
     return calculateFinancialRatios(bs, pnl);
@@ -245,7 +253,7 @@ export default function App() {
 
   // Handle Export Workbook (XLSX)
   const handleExportWorkbook = () => {
-    try { exportFullFinancialWorkbookXLSX(
+    try { assertReportReady(reportChecks); exportFullFinancialWorkbookXLSX(
       selectedCompany,
       selectedPeriod,
       tbCalculations.adjustedRows,
@@ -253,7 +261,8 @@ export default function App() {
       bs,
       eq,
       cf,
-      ratios
+      ratios,
+      reportChecks
     );
     addAuditAction('Exported Financial Workbook', `Generated multi-tab Excel workbook for ${selectedPeriod.name}`);
     } catch (error) { setSyncMessage(`Export failed: ${error instanceof Error ? error.message : String(error)}`); }
@@ -261,7 +270,7 @@ export default function App() {
 
   // Handle Export Executive PDF
   const handleExportPDF = () => {
-    try { exportExecutivePDF(selectedCompany, selectedPeriod, pnl, bs, eq, cf, ratios);
+    try { assertReportReady(reportChecks); exportExecutivePDF(selectedCompany, selectedPeriod, pnl, bs, eq, cf, ratios, reportChecks);
     addAuditAction('Exported Executive PDF', `Generated formatted PDF financial statement packet for ${selectedPeriod.name}`);
     } catch (error) { setSyncMessage(`Export failed: ${error instanceof Error ? error.message : String(error)}`); }
   };
@@ -328,7 +337,7 @@ export default function App() {
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onLogout={() => { logoutUser().catch(error => setSyncMessage(`Sign-out failed: ${error.message}`)); }}
         onExportWorkbook={handleExportWorkbook}
-        isReconciled={bs.isReconciled}
+        isReconciled={tbRows.length > 0 && !reportChecks.some(check => check.status === "blocked")}
         onOpenTests={() => setIsTestRunnerOpen(true)}
       />
 
@@ -380,6 +389,7 @@ export default function App() {
             <span>Draft educational reports · no IFRS/SLFRS certification</span>
           </div>
           <fieldset disabled={!!currentUser && !cloudReady} className="min-w-0">
+          <ValidationPanel checks={reportChecks} currency={selectedCompany.currency} onReview={() => setCurrentTab("statements")} />
           {/* Active Tab Routing */}
           {currentTab === 'overview' && (
             <OverviewDashboard
@@ -403,11 +413,13 @@ export default function App() {
               period={selectedPeriod}
               rows={tbCalculations.adjustedRows}
               onUpdateRows={(newRows) => {
-                if (selectedPeriod.status === "closed") { alert("Closed periods cannot be edited."); return; }
-                const errors = [...validateTrialBalance(newRows), ...adjustments.filter(a => a.status === "posted").flatMap(a => validateJournal(a, newRows))];
-                if (errors.length) { alert(`Cannot change accounts referenced by posted journals: ${errors.join("; ")}`); return; }
+                if (selectedPeriod.status === "closed") { alert("Closed periods cannot be edited."); return false; }
+                const errors = [...validateTrialBalance(newRows), ...adjustments.filter(a => a.status === "posted").flatMap(a => validateJournal(a, newRows, selectedPeriod))];
+                if (errors.length) { alert(`Cannot update trial balance: ${errors.join("; ")}`); return false; }
+                try { validateLedger({...currentLedger, tbRows:newRows}, selectedPeriod); } catch(error) { alert(String(error)); return false; }
                 setTbRows(newRows);
                 addAuditAction('Trial Balance Modified', `Updated account balances or lines (${newRows.length} accounts)`);
+                return true;
               }}
               totalUnadjustedDebit={tbCalculations.totalUnadjustedDebit}
               totalUnadjustedCredit={tbCalculations.totalUnadjustedCredit}
@@ -427,6 +439,7 @@ export default function App() {
               adjustments={adjustments}
               onUpdateAdjustments={(newAdjustments) => {
                 if (selectedPeriod.status === "closed") { alert("Closed periods cannot be edited."); return; }
+                try { validateLedger({...currentLedger, adjustments:newAdjustments}, selectedPeriod); } catch (error) { alert(String(error)); return; }
                 setAdjustments(newAdjustments);
                 addAuditAction('Adjusting Journals Changed', `Active adjustments count: ${newAdjustments.length}`);
               }}
@@ -448,11 +461,14 @@ export default function App() {
               cf={cf}
               supplementary={supplementary}
               onUpdateSupplementary={(supp) => {
+                try { validateLedger({...currentLedger, supplementary:supp}, selectedPeriod); } catch(error) { alert(String(error)); return; }
                 setSupplementary(supp);
                 addAuditAction('Supplementary Cash Flow Updated', `Updated non-cash disclosures`);
               }}
               equityMovement={equityMovement}
               onUpdateEquityMovement={(eqData) => {
+                const errors = validateEquityMovement(eqData, selectedPeriod.id);
+                if (errors.length) { alert(errors.join("; ")); return; }
                 setEquityMovement(eqData);
                 addAuditAction('Equity Movements Updated', `Updated opening capital and dividends`);
               }}

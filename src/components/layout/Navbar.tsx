@@ -55,18 +55,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           {isReconciled ? (
             <span className="flex items-center gap-1.5 text-emerald-400">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>A = L + E Reconciled</span>
+              <span>Draft checks passed</span>
             </span>
           ) : (
             <span className="text-amber-400 font-medium">
-              Review Balance Difference
+              Review reporting checks
             </span>
           )}
         </div>
       </div>
 
       {/* Zone 2: 4-5 clean single-line navigation links */}
-      <nav className="hidden xl:flex items-center gap-6 text-sm font-medium text-slate-400">
+      <nav className="hidden 2xl:flex items-center gap-6 text-sm font-medium text-slate-400">
         {navItems.map((item) => {
           const isActive = currentTab === item.id;
           return (

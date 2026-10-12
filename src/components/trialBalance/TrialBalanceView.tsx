@@ -21,6 +21,7 @@ import {
   autoDetectColumnMapping,
   mapRawRowsToTrialBalance,
   ColumnMapping,
+  ParseResult,
 } from '../../services/importService';
 import { exportTrialBalanceCSV, downloadCSV } from '../../services/exportService';
 
@@ -28,7 +29,7 @@ interface TrialBalanceViewProps {
   company: Company;
   period: ReportingPeriod;
   rows: TrialBalanceRow[];
-  onUpdateRows: (rows: TrialBalanceRow[]) => void;
+  onUpdateRows: (rows: TrialBalanceRow[]) => boolean;
   totalUnadjustedDebit: number;
   totalUnadjustedCredit: number;
   totalAdjustedDebit: number;
@@ -82,7 +83,8 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
     credit: '',
     isContra: '',
   });
-  const [importValidationResult, setImportValidationResult] = useState<any | null>(null);
+  const [importValidationResult, setImportValidationResult] = useState<ParseResult | null>(null);
+  const [accountOverrides, setAccountOverrides] = useState<Record<string, AccountClassification>>({});
   const [importFileError, setImportFileError] = useState<string | null>(null);
 
   const curr = company.currency;
@@ -123,13 +125,13 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
       adjustedCredit: 0,
       netDebitCredit: 0,
     };
-    onUpdateRows([...rows, newRow]);
+    if (!onUpdateRows([...rows, newRow])) return;
     onAuditAction('Account Created', `Created account ${newCode} - New Financial Account`);
   };
 
   const handleDeleteRow = (id: string, name: string) => {
     if (confirm(`Remove account "${name}" from the trial balance?`)) {
-      onUpdateRows(rows.filter((r) => r.id !== id));
+      if (!onUpdateRows(rows.filter((r) => r.id !== id))) return;
       onAuditAction('Account Deleted', `Removed account ${name}`);
     }
   };
@@ -146,9 +148,10 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
 
       const detected = autoDetectColumnMapping(headers);
       setColumnMapping(detected);
+      setAccountOverrides({});
 
       // Run mapping preview
-      const preview = mapRawRowsToTrialBalance(rawRows, detected);
+      const preview = mapRawRowsToTrialBalance(rawRows, detected, rows);
       setImportValidationResult(preview);
       setIsImportModalOpen(true);
     } catch (err: any) {
@@ -162,15 +165,15 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
     const updated = { ...columnMapping, [field]: value };
     setColumnMapping(updated);
     if (rawImportData.length > 0) {
-      const preview = mapRawRowsToTrialBalance(rawImportData, updated);
+      const preview = mapRawRowsToTrialBalance(rawImportData, updated, rows, accountOverrides);
       setImportValidationResult(preview);
     }
   };
 
   const handleConfirmImport = () => {
     if (!importValidationResult || importValidationResult.rows.length === 0) return;
-    if (importValidationResult.errors.length) { alert(importValidationResult.errors.join("\n")); return; }
-    onUpdateRows(importValidationResult.rows);
+    if (!importValidationResult.isBalanced) { alert(importValidationResult.errors.join("\n")); return; }
+    if (!onUpdateRows(importValidationResult.rows)) return;
     onAuditAction(
       'Trial Balance Imported',
       `Imported ${importValidationResult.rows.length} accounts. Balanced: ${importValidationResult.isBalanced}`
@@ -482,7 +485,7 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
       {/* CSV / XLSX Import Modal */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-xl max-w-2xl w-full p-6 space-y-5 shadow-2xl">
+          <div className="bg-[#0f172a] border border-slate-700 rounded-xl max-w-3xl w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -580,7 +583,7 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
                   onChange={(e) => handleMappingChange('isContra', e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"
                 >
-                  <option value="">-- Auto-detect by name --</option>
+                  <option value="">-- Existing flag / normal --</option>
                   {importHeaders.map((h) => (
                     <option key={h} value={h}>{h}</option>
                   ))}
@@ -588,6 +591,25 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
               </div>
             </div>
 
+            <details open className="text-xs border border-slate-700 rounded-lg p-3">
+              <summary className="font-semibold cursor-pointer">Chart of Accounts mapping</summary>
+              <p className="text-slate-400 my-2">Existing account codes retain their journal links. Choose a classification for new or unmapped accounts. Import replaces this period’s unadjusted balances; posted journals remain.</p>
+              <div className="max-h-48 overflow-auto space-y-2">
+                {rawImportData.map((raw, index) => {
+                  const code = String(raw[columnMapping.accountCode] ?? '').trim();
+                  const key = code.toLowerCase();
+                  const parsed = importValidationResult?.rows.find(row => row.accountCode.toLowerCase() === key);
+                  return <div key={index} className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-slate-800 pt-2">
+                    <span className="truncate">{code || 'Missing code'} · {String(raw[columnMapping.accountName] ?? '')}</span>
+                    <select aria-label={`Map account ${code || index}`} value={accountOverrides[key] ?? parsed?.classification ?? ''} className="bg-slate-900 rounded border border-slate-700 p-1.5" onChange={event => {
+                      const next = {...accountOverrides};
+                      if (event.target.value) next[key] = event.target.value as AccountClassification; else delete next[key];
+                      setAccountOverrides(next); setImportValidationResult(mapRawRowsToTrialBalance(rawImportData, columnMapping, rows, next));
+                    }}><option value="">Choose classification…</option>{CLASSIFICATION_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                  </div>;
+                })}
+              </div>
+            </details>
             {/* Import Validation Preview */}
             {importValidationResult && (
               <div className="p-3.5 bg-slate-900 rounded-lg border border-slate-800 text-xs space-y-2">
@@ -611,9 +633,10 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
                   <div>Total Credit: {formatCurrency(importValidationResult.totalCredit, curr)}</div>
                 </div>
 
+                {!!importValidationResult.errors.length && <div role="alert" className="text-rose-300 max-h-28 overflow-auto">{importValidationResult.errors.map((error, index) => <p key={index}>{error}</p>)}</div>}
                 {importValidationResult.warnings.length > 0 && (
                   <div className="text-[11px] text-amber-400 bg-amber-950/30 p-2 rounded border border-amber-900/50">
-                    {importValidationResult.warnings[0]}
+                    {importValidationResult.warnings.join(" ")}
                   </div>
                 )}
               </div>
@@ -629,7 +652,7 @@ export const TrialBalanceView: React.FC<TrialBalanceViewProps> = ({
               </button>
               <button
                 onClick={handleConfirmImport}
-                disabled={!importValidationResult || importValidationResult.rows.length === 0}
+                disabled={!importValidationResult?.isBalanced}
                 className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-md disabled:opacity-50"
               >
                 Apply Imported Trial Balance
